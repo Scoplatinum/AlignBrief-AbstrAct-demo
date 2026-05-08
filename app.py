@@ -3,8 +3,9 @@ import os
 import streamlit as st
 
 
-APP_TITLE = "AlignBrief｜多方协作会议对齐助手"
-APP_SUBTITLE = "从会议记录到角色化行动清单"
+APP_TITLE = "AlignBrief — AbstrAct｜多方协作会议对齐助手"
+APP_SUBTITLE = "从抽象会议记录到角色化行动清单"
+APP_SLOGAN = "From abstract talk to actionable briefs."
 
 SAMPLE_MEETING_NOTE = """PI：这个设备先别急着上正式实验，我们先打个样。现在最重要的不是把方案写得多完整，而是判断这个方向能不能往前走。
 工程这边上次说可以再轻一点，但如果续航和采样率受影响，要提前说清楚。研究这边也不要什么指标都想要，先明确哪些数据是必须有的。
@@ -20,7 +21,9 @@ ROLE_OPTIONS = [
     "工程合作者",
     "数据分析成员",
     "现场/动物中心合作方",
-    "后来加入的新人",
+    "后续进行对接工作的新人",
+    "其他部门概况了解者",
+    "非直接执行的相关观察者",
 ]
 
 MEETING_TYPE_OPTIONS = [
@@ -44,6 +47,8 @@ SECTION_NAMES = [
     "依据与不确定性提示",
 ]
 
+GLOSSARY_SECTION = "名词解释与背景补充建议"
+
 
 def initialize_session_state():
     if "meeting_note" not in st.session_state:
@@ -59,14 +64,21 @@ def restore_sample_text():
     st.session_state.pop("generated_role", None)
 
 
-def parse_ai_response(text):
-    if all(section in text for section in SECTION_NAMES):
+def get_expected_sections(include_glossary):
+    if include_glossary:
+        return SECTION_NAMES + [GLOSSARY_SECTION]
+    return SECTION_NAMES
+
+
+def parse_ai_response(text, include_glossary):
+    expected_sections = get_expected_sections(include_glossary)
+    if all(section in text for section in expected_sections):
         return text
 
     scaffold = []
-    for index, section in enumerate(SECTION_NAMES):
+    for index, section in enumerate(expected_sections):
         if index == 0:
-            body = "AI 返回内容未能稳定拆分为六个标题，以下保留原始输出，供人工复核。"
+            body = "AI 返回内容未能稳定拆分为指定标题，以下保留原始输出，供人工复核。"
         else:
             body = "请在原始输出中复核这一项。"
         scaffold.append(f"## {section}\n{body}")
@@ -74,16 +86,25 @@ def parse_ai_response(text):
     return "\n\n".join(scaffold) + "\n\n---\n\n" + text
 
 
-def build_prompt(role, meeting_type, project_background, meeting_note):
-    required_sections = "\n".join(f"## {section}" for section in SECTION_NAMES)
+def build_prompt(role, meeting_type, project_background, meeting_note, include_glossary):
+    expected_sections = get_expected_sections(include_glossary)
+    required_sections = "\n".join(f"## {section}" for section in expected_sections)
+    glossary_instruction = ""
+    if include_glossary:
+        glossary_instruction = (
+            "\n10. 用户勾选了“名词解释与背景补充建议”。请额外输出“## 名词解释与背景补充建议”。"
+            "这个 section 要用大白话解释重要术语、缩写、内部黑话或专业概念。"
+            "如果某个词在当前材料里含义不明确，请标记为“需结合项目内部语境确认”。"
+        )
+
     return f"""
-你是 AlignBrief，一个会议后的角色化对齐助手。请基于用户提供的会议记录和项目背景，为指定角色生成中文行动 brief。
+你是 AlignBrief — AbstrAct，一个会议后的角色化对齐助手。请基于用户提供的会议记录和项目背景，为指定角色生成中文行动 brief。
 
 这是一个会议对齐工具，不是普通会议总结器。你的输出应回答：
 “对我这个角色来说，我需要理解什么、执行什么、确认什么、留档什么？”
 
 必须遵守：
-1. 必须输出且只输出以下六个二级标题：
+1. 必须输出且只输出以下二级标题：
 {required_sections}
 2. 每个 section 用精炼项目符号输出，适合复制到飞书、Notion、Teams 等协作工具。
 3. 必须紧扣当前会议记录、项目背景、角色和会议类型。
@@ -91,6 +112,8 @@ def build_prompt(role, meeting_type, project_background, meeting_note):
 5. 对缺失、不确定、需要追问的信息，放入“仍需确认的问题”。
 6. 在“依据与不确定性提示”中说明输出依据、哪些内容不确定、关键决策仍需负责人确认。
 7. “下一步行动清单”必须针对所选角色，不要写成所有人的通用任务。
+8. 请尽量使用大白话解释，不要把会议里的抽象词直接换成另一组抽象词。遇到专业术语时，如果用户勾选了名词解释，请用新人能看懂的话解释。
+9. 请体现跨时间协作价值：让参会者能执行，让未参会者能理解上下文，让后续接手者能知道项目阶段、关键共识、风险和应该找谁确认。{glossary_instruction}
 
 会议类型：{meeting_type}
 我的角色：{role}
@@ -118,7 +141,15 @@ def get_error_message(error):
     return f"生成失败：{error_type}。请检查网络、模型名称或输入内容后重试。"
 
 
-def generate_ai_brief(api_key, model, role, meeting_type, project_background, meeting_note):
+def generate_ai_brief(
+    api_key,
+    model,
+    role,
+    meeting_type,
+    project_background,
+    meeting_note,
+    include_glossary,
+):
     from openai import OpenAI
 
     client = OpenAI(api_key=api_key)
@@ -131,13 +162,19 @@ def generate_ai_brief(api_key, model, role, meeting_type, project_background, me
             },
             {
                 "role": "user",
-                "content": build_prompt(role, meeting_type, project_background, meeting_note),
+                "content": build_prompt(
+                    role,
+                    meeting_type,
+                    project_background,
+                    meeting_note,
+                    include_glossary,
+                ),
             },
         ],
         temperature=0.2,
     )
     text = response.choices[0].message.content or ""
-    return parse_ai_response(text.strip())
+    return parse_ai_response(text.strip(), include_glossary)
 
 
 def render_comparison_block():
@@ -151,14 +188,42 @@ def render_comparison_block():
     )
 
 
+def render_cross_time_block():
+    st.markdown("### 它也解决“后来的人怎么接上”的问题")
+    st.markdown(
+        """
+- 参会者需要会后行动清单。
+- 未参会者需要快速理解上下文。
+- 后续接手者需要知道项目阶段、关键共识、风险和应该找谁确认。
+- 团队需要把一次会议沉淀成可交接、可复用的项目知识资产。
+"""
+    )
+
+
+def render_story_expanders():
+    with st.expander("为什么叫 AbstrAct？"):
+        st.write(
+            "因为很多会议不是没有内容，而是内容太抽象：“你去问问他们”“先看看这个”“找几个案例试试”。"
+            "AbstrAct 的意思是把 abstract talk 变成 action brief：把听起来玄之又玄的讨论，拆成目标、行动、待确认问题和可交接记录。"
+        )
+
+    with st.expander("灵感来源：听不懂玄之又玄的会，也想贯彻落实"):
+        st.write(
+            "有时候会议里一句“你去问问他们”“先看看这个”“找几个案例试试”，背后可能藏着目标、责任人、交付物、判断标准和一堆历史背景。"
+            "AlignBrief — AbstrAct 想做的不是替人拍脑袋，而是把这些抽象内容拆成可确认、可执行、可交接的行动入口。"
+        )
+
+
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="AB", layout="wide")
     initialize_session_state()
 
     st.title(APP_TITLE)
     st.caption(APP_SUBTITLE)
-    st.write("把一段多方协作会议记录，转成不同角色能执行、能追问、能留档的行动 brief。")
-    st.info("本 Demo 不是会议总结器，而是会议后的角色化对齐层。")
+    st.caption(APP_SLOGAN)
+    st.write("把一段抽象、分散、跨角色的会议记录，转成不同角色能执行、能追问、能交接、能留档的行动 brief。")
+    st.info("本 Demo 不是会议总结器，而是会议后的角色化对齐层，也是一层给后来加入者看的项目接续说明。")
+    render_story_expanders()
 
     with st.sidebar:
         st.header("生成设置")
@@ -175,6 +240,7 @@ def main():
         model = st.selectbox("模型", MODEL_OPTIONS, index=0)
         role = st.selectbox("我的角色", ROLE_OPTIONS)
         meeting_type = st.selectbox("会议类型", MEETING_TYPE_OPTIONS)
+        include_glossary = st.checkbox("需要名词解释与背景补充建议", value=False)
         st.caption("当前版本使用 GPT API 实时生成。")
 
         api_key = api_key_input.strip() or os.getenv("OPENAI_API_KEY", "").strip()
@@ -198,6 +264,7 @@ def main():
         with restore_button_col:
             st.button("恢复示例文本", on_click=restore_sample_text, use_container_width=True)
 
+        st.warning("请使用脱敏文本测试。当前版本会把输入内容发送到所选模型服务进行生成。")
         meeting_note = st.text_area("会议记录", key="meeting_note", height=300)
         project_background = st.text_area("项目背景", key="project_background", height=180)
 
@@ -211,6 +278,7 @@ def main():
                     meeting_type=meeting_type,
                     project_background=project_background,
                     meeting_note=meeting_note,
+                    include_glossary=include_glossary,
                 )
                 st.session_state.generated_role = role
                 st.session_state.generated_model = model
@@ -233,11 +301,12 @@ def main():
 
     st.divider()
     render_comparison_block()
+    render_cross_time_block()
 
     st.divider()
     st.caption(
         "本 Demo 使用脱敏虚构案例。实际使用时应在合规授权和内部权限范围内处理会议内容。"
-        "输出仅作为会后复述和对齐草稿，关键决策仍需由项目负责人确认。"
+        "输出仅作为会后复述、行动拆解和待确认问题整理，不作为最终决策、责任分配或专业判断依据。"
     )
 
 
