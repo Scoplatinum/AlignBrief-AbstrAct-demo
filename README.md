@@ -14,7 +14,7 @@ English slogan: From abstract talk to actionable briefs.
 
 AbstrAct = abstract talk + action brief。
 
-很多会议不是没有内容，而是内容太抽象。AlignBrief — AbstrAct 想做的不是替人拍脑袋，而是把听起来玄之又玄的讨论，拆成目标、行动、待确认问题和可交接记录。
+你是否听得懂大导的话？大导又是否在会议结束后记得自己说过什么？很多会议内容满满但抽象无比。AlignBrief — AbstrAct 想做的不是替人拍脑袋，而是把听起来玄之又玄的讨论，拆成目标、行动、待确认问题和可交接记录。
 
 ## 为什么这不只是会议总结器
 
