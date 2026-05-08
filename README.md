@@ -1,10 +1,8 @@
 # AlignBrief — AbstrAct｜多方协作会议对齐助手
 
-Repository name: `alignbrief-abstract-demo`
-
 English slogan: From abstract talk to actionable briefs.
 
-一句话描述：把一段抽象、分散、跨角色的会议记录，通过 GPT API 转成不同角色能执行、能追问、能交接、能留档的行动 brief。
+把一段抽象、分散、跨角色的会议记录，通过 GPT API 转成不同角色能执行、能追问、能交接、能留档的行动 brief。
 
 ## 产品问题
 
