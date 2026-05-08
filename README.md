@@ -100,3 +100,5 @@ OPENAI_API_KEY=your_api_key_here
 - abstract instruction clarification
 - local/private deployment
 - audio transcription
+
+未来可以把 AlignBrief — AbstrAct 抽象成一个可嵌入不同工具的 skill：它可以运行在本地 Streamlit 页面里，也可以嵌入飞书/Notion/企业知识库/GPT 工作流中。当前 Demo 只是展示这个 skill 产品化后的最小交互形态。
