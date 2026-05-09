@@ -146,6 +146,15 @@ def get_error_message(error):
     return f"生成失败：{error_type}。请检查网络、模型名称或输入内容后重试。"
 
 
+def get_server_api_key():
+    try:
+        secret_key = st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        secret_key = ""
+
+    return secret_key.strip() or os.getenv("OPENAI_API_KEY", "").strip()
+
+
 def generate_ai_brief(
     api_key,
     model,
@@ -248,9 +257,13 @@ def main():
         include_glossary = st.checkbox("需要名词解释与背景补充建议", value=False)
         st.caption("当前版本使用 GPT API 实时生成。")
 
-        api_key = api_key_input.strip() or os.getenv("OPENAI_API_KEY", "").strip()
+        ui_api_key = api_key_input.strip()
+        server_api_key = get_server_api_key()
+        api_key = ui_api_key or server_api_key
         has_api_key = bool(api_key)
-        if not has_api_key:
+        if server_api_key:
+            st.caption("当前在线 Demo 已配置服务端 API key，可直接生成。请使用脱敏文本测试。")
+        elif not has_api_key:
             st.warning("请先输入 OpenAI API Key，或在本地设置 OPENAI_API_KEY。")
 
         generate_clicked = st.button(
